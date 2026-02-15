@@ -19,9 +19,13 @@ class CronScheduleTool(Tool):
         job_id = self.manager.add_job(schedule, command)
         return f"✅ Scheduled task '{command}' with ID {job_id} (schedule: '{schedule}')"
 
+class CronListSchema(BaseModel):
+    pass
+
 class CronListTool(Tool):
     name = "cron_list"
     description = "List all scheduled cron jobs."
+    args_schema = CronListSchema
 
     def __init__(self, manager: Any):
         self.manager = manager
