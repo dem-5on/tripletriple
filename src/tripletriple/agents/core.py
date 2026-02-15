@@ -123,7 +123,7 @@ class ReActAgent(Agent):
 
                 tool = self.tool_registry.get(func_name)
                 if tool:
-                    yield f"\n\n🔧 *{func_name}*\n"
+                    # yield f"\n\n🔧 *{func_name}*\n"
                     try:
                         args = json.loads(args_str) if args_str else {}
                         # Pass tool context for context-aware tools

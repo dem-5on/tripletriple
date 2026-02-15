@@ -306,9 +306,9 @@ class SystemPromptBuilder:
             f"- **Workspace:** {self.config.root}",
             "",
             "## Critical Tool Rules",
-            "1. **Do not hallucinate answers** before using tools. If you need to check something, invoke the tool immediately.",
-            "2. **Atomic Actions**: Do not generate a final answer and a tool call in the same response. If you use a tool, your text should only be a brief thought or 'Checking...'.",
-            "3. **No Stuttering**: Ensure your output is clean and does not repeat previously stated internal thoughts.",
+            "1. **Silent Execution**: Do NOT announce that you are going to use a tool. Just use it. Avoid phrases like 'I will now check...' or 'Let me see...'.",
+            "2. **Direct Answers**: After using a tool, provide the answer directly. Do not narrate your actions (e.g. 'I have read the file. It says...'). Just say what it says.",
+            "3. **No Stuttering**: Do not repeat the same information. If you found the answer, give it.",
         ]
 
         if self.tools:
