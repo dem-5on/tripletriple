@@ -1,13 +1,13 @@
 <p align="center">
-  <img src="docs/assets/banner.png" alt="OpenClaw Banner" width="100%">
+  <img src="docs/assets/banner.png" alt="TripleTriple Banner" width="100%">
 </p>
 
-# OpenClaw
+# TripleTriple
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-OpenClaw is a powerful, local-first AI agent gateway designed to bring advanced agentic capabilities to all your messaging channels. It provides a unified ReAct-based runtime that connects your favorite LLMs to various tools, messaging platforms, and long-term memory.
+TripleTriple is a powerful, local-first AI agent gateway designed to bring advanced agentic capabilities to all your messaging channels. It provides a unified ReAct-based runtime that connects your favorite LLMs to various tools, messaging platforms, and long-term memory.
 
 ---
 
@@ -23,7 +23,7 @@ OpenClaw is a powerful, local-first AI agent gateway designed to bring advanced 
   - **Cron**: Schedule recurring tasks and background jobs.
 - **💾 Long-Term Memory**: Powered by **LanceDB**, allowing the agent to save snippets and search through them across sessions.
 - **🤖 Subagent Spawning**: Spawn autonomous child agents for background tasks that report back when complete.
-- **🆙 Self-Updating**: Built-in CLI and agent-triggered update mechanism (`openclaw update`) to keep your instance current.
+- **🆙 Self-Updating**: Built-in CLI and agent-triggered update mechanism (`tripletriple update`) to keep your instance current.
 
 ---
 
@@ -33,7 +33,7 @@ OpenClaw is a powerful, local-first AI agent gateway designed to bring advanced 
 
    ```bash
    git clone https://github.com/dem-5on/tripletriple.git
-   cd tripletriple/openclaw
+   cd tripletriple/tripletriple
    ```
 
 2. **Install dependencies:**
@@ -59,7 +59,7 @@ OpenClaw is a powerful, local-first AI agent gateway designed to bring advanced 
 The gateway is the core control plane:
 
 ```bash
-openclaw gateway
+tripletriple gateway
 ```
 
 ### 📱 Running Channels
@@ -67,20 +67,20 @@ openclaw gateway
 Start your preferred messaging bot:
 
 ```bash
-openclaw telegram
+tripletriple telegram
 # or
-openclaw discord
+tripletriple discord
 ```
 
 ### 🛠️ CLI Commands
 
-OpenClaw comes with a powerful CLI for management:
+TripleTriple comes with a powerful CLI for management:
 
 ```bash
-openclaw status          # Check system health
-openclaw models list     # See available LLMs
-openclaw update          # Pull latest changes and update
-openclaw version         # Show current commit and version
+tripletriple status          # Check system health
+tripletriple models list     # See available LLMs
+tripletriple update          # Pull latest changes and update
+tripletriple version         # Show current commit and version
 ```
 
 ---
@@ -88,8 +88,8 @@ openclaw version         # Show current commit and version
 ## 📦 Project Structure
 
 ```text
-openclaw/
-├── src/openclaw/
+tripletriple/
+├── src/tripletriple/
 │   ├── agents/          # ReAct runtime and tool definitions
 │   ├── channels/        # Telegram, Discord, Slack adapters
 │   ├── gateway/         # FastAPI server and session management
@@ -103,7 +103,7 @@ openclaw/
 
 ## 🛡️ Workspace & Identity
 
-OpenClaw allows you to customize your agent's personality and knowledge via the `workspace/` directory:
+TripleTriple allows you to customize your agent's personality and knowledge via the `workspace/` directory:
 
 - `SOUL.md`: Core personality and behavioral guidelines.
 - `IDENTITY.md`: Who the agent thinks it is.
