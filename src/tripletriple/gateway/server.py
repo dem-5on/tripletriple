@@ -158,6 +158,7 @@ dock = ChannelDock(
 tool_context["dock"] = dock
 tool_context["agent"] = agent
 
+channel_tasks = []
 
 async def _load_channels():
     """Load and start channels configured in .env."""
@@ -172,7 +173,8 @@ async def _load_channels():
             channel = TelegramChannel(on_message=dock.handle_incoming_message)
             dock.register_channel("telegram", channel)
             # Start in background
-            asyncio.create_task(channel.start())
+            task = asyncio.create_task(channel.start())
+            channel_tasks.append(task)
         except Exception as e:
             logger.error(f"❌ Failed to load Telegram: {e}")
 
@@ -183,7 +185,8 @@ async def _load_channels():
             logger.info("🔌 Loading Discord channel...")
             channel = DiscordChannel(on_message=dock.handle_incoming_message)
             dock.register_channel("discord", channel)
-            asyncio.create_task(channel.start())
+            task = asyncio.create_task(channel.start())
+            channel_tasks.append(task)
         except Exception as e:
             logger.error(f"❌ Failed to load Discord: {e}")
 
@@ -194,7 +197,8 @@ async def _load_channels():
             logger.info("🔌 Loading Slack channel...")
             channel = SlackChannel(on_message=dock.handle_incoming_message)
             dock.register_channel("slack", channel)
-            asyncio.create_task(channel.start())
+            task = asyncio.create_task(channel.start())
+            channel_tasks.append(task)
         except Exception as e:
             logger.error(f"❌ Failed to load Slack: {e}")
 
@@ -232,16 +236,31 @@ async def lifespan(app: FastAPI):
     # Shutdown logic
     logger.info("OpenClaw Gateway shutting down...")
     
+    import asyncio
+    
     # Stop all channels
     for name, channel in dock.channels.items():
         try:
             logger.info(f"Stopping {name} channel...")
-            await channel.stop()
+            # Timeout force stop
+            await asyncio.wait_for(channel.stop(), timeout=3.0)
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout stopping {name}, forcing...")
         except Exception as e:
             logger.error(f"Error stopping {name}: {e}")
+            
+    # Cancel tasks
+    for task in channel_tasks:
+        if not task.done():
+            task.cancel()
+    
+    # Wait for tasks to cancel
+    if channel_tasks:
+        await asyncio.gather(*channel_tasks, return_exceptions=True)
 
     # Persist sessions on shutdown
     session_manager.save()
+    logger.info("OpenClaw Gateway shutdown complete.")
 
 
 app = FastAPI(

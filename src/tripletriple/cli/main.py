@@ -35,10 +35,16 @@ def main(ctx: typer.Context):
         
         # If not configured, run onboarding
         if not cm.is_configured():
-            should_start = run_onboarding()
-            if not should_start:
+            result = run_onboarding()
+            if result == "detach":
+                from tripletriple.cli.daemon import start_daemon
+                start_daemon()
                 return
-        
+            elif result == "start":
+                pass  # Fall through to ctx.invoke
+            else:
+                return
+
         # Start gateway (pass default args)
         ctx.invoke(gateway, host="127.0.0.1", port=8000, reload=False)
 
@@ -487,10 +493,80 @@ def doctor():
 
 
 @app.command()
-def onboard():
+def onboard(ctx: typer.Context):
     """Interactive onboarding wizard."""
     from tripletriple.cli.onboard import run_onboarding
-    run_onboarding()
+    
+    result = run_onboarding()
+    if result == "detach":
+        from tripletriple.cli.daemon import start_daemon
+        start_daemon()
+    elif result == "start":
+        ctx.invoke(gateway, host="127.0.0.1", port=8000, reload=False)
+
+
+# ─── Daemon Commands ───────────────────────────────────────────────
+
+@app.command()
+def start(
+    host: str = typer.Option("127.0.0.1", help="Host to bind"),
+    port: int = typer.Option(8000, help="Port to bind"),
+):
+    """Start the gateway in background mode (detached)."""
+    from tripletriple.cli.daemon import start_daemon
+    start_daemon(host, port)
+
+
+@app.command()
+def stop():
+    """Stop the background gateway process."""
+    from tripletriple.cli.daemon import stop_daemon
+    stop_daemon()
+
+
+@app.command()
+def restart(
+    host: str = typer.Option("127.0.0.1", help="Host to bind"),
+    port: int = typer.Option(8000, help="Port to bind"),
+):
+    """Restart the background gateway process."""
+    from tripletriple.cli.daemon import restart_daemon
+    restart_daemon(host, port)
+
+
+@app.command()
+def status():
+    """Check status of the background gateway."""
+    from tripletriple.cli.daemon import get_status
+    state, pid = get_status()
+    if state == "running":
+        typer.echo(f"✅ Gateway is running (PID: {pid})")
+    else:
+        typer.echo("❌ Gateway is stopped")
+
+
+@app.command()
+def logs(
+    lines: int = typer.Option(50, "--lines", "-n", help="Number of lines to show"),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
+):
+    """View gateway logs."""
+    from tripletriple.cli.daemon import LOG_FILE
+    import subprocess
+    
+    if not LOG_FILE.exists():
+        typer.echo("No log file found.")
+        return
+
+    cmd = ["tail", "-n", str(lines)]
+    if follow:
+        cmd.append("-f")
+    cmd.append(str(LOG_FILE))
+    
+    try:
+        subprocess.run(cmd)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

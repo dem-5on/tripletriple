@@ -12,6 +12,7 @@ Mirrors the original TripleTriple model system:
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 from enum import Enum
+import os
 
 
 class ModelCapability(str, Enum):
@@ -246,7 +247,7 @@ MODEL_CATALOG: Dict[str, ProviderInfo] = {
 
 class ModelSelection(BaseModel):
     """Tracks the user's model selection and fallback chain."""
-    primary: str = "openai/gpt-5.2"
+    primary: str = Field(default_factory=lambda: os.getenv("TRIPLETREBLE_MODEL", "openai/gpt-5.2"))
     fallbacks: List[str] = ["openai/gpt-5-mini", "anthropic/claude-sonnet-4-5-20250929", "gemini/gemini-2.5-flash"]
     image_model: Optional[str] = "openai/gpt-4o"
     aliases: Dict[str, str] = {}
