@@ -1,0 +1,43 @@
+[project]
+name = "openclaw"
+version = "0.1.0"
+description = "A local-first AI agent gateway."
+authors = [
+    {name = "User", email = "user@example.com"},
+]
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "typer>=0.12.0",
+    "python-dotenv>=1.0.0",
+    "websockets>=12.0",
+    "httpx>=0.27.0",
+    "jinja2>=3.1.0",
+    "aiogram>=3.4.0",           # Telegram
+    "discord.py>=2.3.0",        # Discord
+    "slack_bolt>=1.18.0",       # Slack
+    "whatsapp-python>=1.1.2",   # WhatsApp (wrapper)
+    "openai>=1.14.0",           # LLM Providers
+    "anthropic>=0.18.0",
+    "google-genai>=1.0.0",
+    "lancedb>=0.5.0",           # Vector DB
+    "playwright>=1.42.0",       # Browser Tool
+    "croniter>=2.0.0",          # Cron Tool
+    "pyyaml>=6.0.1",
+    "rich>=13.7.0",             # CLI output
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "MIT"}
+
+[project.scripts]
+openclaw = "openclaw.cli.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openclaw"]
