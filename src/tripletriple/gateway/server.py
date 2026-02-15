@@ -25,6 +25,7 @@ from ..agents.tools_session import (
     SessionsSpawnTool,
 )
 from ..agents.tools_gateway import GatewayTool
+from ..agents.tools_search import WebSearchTool
 from ..version import get_version, check_for_updates
 from ..agents.llm import create_provider_with_fallback
 from ..agents.model_catalog import ModelSelector
