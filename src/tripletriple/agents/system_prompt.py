@@ -279,6 +279,11 @@ class SystemPromptBuilder:
             f"- **Time:** {now.strftime('%H:%M %Z').strip()}",
             f"- **Model:** {self.model_name}",
             f"- **Workspace:** {self.config.root}",
+            "",
+            "## Critical Tool Rules",
+            "1. **Do not hallucinate answers** before using tools. If you need to check something, invoke the tool immediately.",
+            "2. **Atomic Actions**: Do not generate a final answer and a tool call in the same response. If you use a tool, your text should only be a brief thought or 'Checking...'.",
+            "3. **No Stuttering**: Ensure your output is clean and does not repeat previously stated internal thoughts.",
         ]
 
         if self.tools:
