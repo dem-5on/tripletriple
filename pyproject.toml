@@ -23,6 +23,7 @@ dependencies = [
     "anthropic>=0.18.0",
     "google-genai>=1.0.0",
     "lancedb>=0.5.0",           # Vector DB
+    "sentence-transformers>=2.3.0", # Embeddings
     "playwright>=1.42.0",       # Browser Tool
     "croniter>=2.0.0",          # Cron Tool
     "pyyaml>=6.0.1",

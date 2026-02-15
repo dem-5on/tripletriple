@@ -6,26 +6,39 @@ from ..memory.store import MemoryStore, MemoryEntry
 
 class MemorySaveSchema(BaseModel):
     content: str = Field(..., description="The information to memorize")
+    category: str = Field(
+        "general",
+        description=(
+            "Category for routing: 'active_task' (crash recovery), 'lesson' (mistakes), "
+            "'project' (state), 'self_review', 'daily' (log), 'general' (legacy)"
+        ),
+    )
     metadata: Optional[str] = Field(None, description="Optional context or tags")
 
 
 class MemorySaveTool(Tool):
-    """Tool for saving information to long-term memory."""
+    """Tool for saving information into structured memory categories."""
 
     name = "memory_save"
-    description = "Save a piece of information to long-term memory for later retrieval."
+    description = (
+        "Save information to long-term memory. "
+        "Choose a category: active_task, lesson, project, self_review, daily, or general."
+    )
     args_schema = MemorySaveSchema
 
     def __init__(self, store: MemoryStore):
         self.store = store
 
-    async def run(self, content: str, metadata: Optional[str] = None) -> str:
+    async def run(
+        self, content: str, category: str = "general", metadata: Optional[str] = None
+    ) -> str:
         entry = MemoryEntry(
             content=content,
+            category=category,
             metadata={"tags": metadata} if metadata else {},
         )
         entry_id = await self.store.add(entry)
-        return f"Saved to memory (id: {entry_id})"
+        return f"Saved to {category} memory (id: {entry_id})"
 
 
 class MemorySearchSchema(BaseModel):

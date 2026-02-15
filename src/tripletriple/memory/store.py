@@ -20,6 +20,7 @@ class MemoryEntry(BaseModel):
     metadata: Dict[str, Any] = {}
     timestamp: float = Field(default_factory=time.time)
     session_id: Optional[str] = None
+    category: str = "general"  # active_task, lesson, project, self_review, daily, general
 
 
 class SearchResult(BaseModel):

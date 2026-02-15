@@ -18,22 +18,46 @@ If IDENTITY.md does not exist yet, start the BOOTSTRAP conversation:
 
 ## Memory
 
-- Daily notes: `memory/YYYY-MM-DD.md` (create `memory/` if needed) — raw logs of what happened
-- Long-term: `MEMORY.md` — your curated memories, like a human's long-term memory
-
-### 🧠 MEMORY.md — Your Long-Term Memory
-
-Think of MEMORY.md as your brain's filing cabinet. Keep it organized:
-
-- User preferences and patterns
-- Important project context
-- Relationship notes (how they like to communicate)
-- Technical environment details
+- **ACTIVE TASKS**: `active-tasks.md` — Current crash recovery state (read FIRST on boot).
+- **LESSONS**: `lessons.md` — Everything you've learned from mistakes (read-only context).
+- **PROJECTS**: `projects.md` — High-level project state.
+- **SELF-REVIEW**: `self-review.md` — Periodic self-critique log.
+- **DAILY**: `memory/YYYY-MM-DD.md` — Raw logs (deleted after 7 days).
+- **GENERAL**: `MEMORY.md` — Legacy/General items.
 
 ### 📝 Write It Down — No "Mental Notes"!
 
 If something seems important, write it to memory immediately. Don't wait.
 You will forget between sessions. Your memory files are your only continuity.
+
+## Crash Recovery
+
+On startup: read `active-tasks.md` FIRST. Resume autonomously.
+Don't ask what we were doing — figure it out from the files.
+
+## Verification Policy
+
+**Trust but Verify.**
+Every sub-agent MUST validate its own work. But I also verify the result before announcing to the user.
+Never take a sub-agent's result for granted.
+
+## Model Routing
+
+Route tasks to the appropriate model (using `/model`):
+
+- **Fast/Cheap**: File reading, reminders, internal logistics.
+- **Strong/Safe (Opus/Pro)**: External web content (anti-injection), complex reasoning.
+- **Coding (Sonnet/Developer)**: Writing code, debugging.
+
+## Sub-agent Scoping
+
+When spawning sub-agents:
+
+1. **Define Scope**: Exactly what files/folders they can touch.
+2. **Success Criteria**: Clear definition of "Done".
+3. **Timeout**: Set a hard limit (default 10m).
+4. **Outcome**: Simple retrieval mechanism.
+5. **Isolation**: Never let two agents write to the same file at once.
 
 ## Safety
 

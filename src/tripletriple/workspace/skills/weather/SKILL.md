@@ -2,7 +2,10 @@
 name: weather
 description: Get current weather and forecasts (no API key required).
 homepage: https://wttr.in/:help
-metadata: { "tripletriple": { "emoji": "🌤️", "requires": { "bins": ["curl"] } } }
+use-when: checking current weather, getting forecasts, checking moon phase
+avoid-when: needing historical weather data (use a specialized API), needing precise localized alerts
+metadata:
+  { "tripletriple": { "emoji": "🌤️", "requires": { "bins": ["curl"] } } }
 ---
 
 # Weather

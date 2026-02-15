@@ -16,8 +16,7 @@ from ..agents.core import ReActAgent
 from ..agents.tools_bash import BashTool
 from ..agents.tools_browser import BrowserNavigateTool
 from ..agents.tools_file import ReadFileTool, WriteFileTool
-from ..agents.tools_search import WebSearchTool
-from ..agents.tools_cron import CronTool
+from ..agents.tools_cron import CronScheduleTool, CronListTool, CronDeleteTool
 from ..agents.tools_memory import MemorySaveTool, MemorySearchTool
 from ..agents.tools_session import (
     SessionsListTool,
@@ -37,8 +36,12 @@ from ..gateway.session import (
     SessionConfig,
     ChatCommandHandler,
     InboundContext,
+    ChatType,
 )
-from ..memory.lancedb_store import InMemoryStore
+from ..memory.lancedb_store import LanceDBMemoryStore
+from ..memory.file_store import FileBackedMemoryStore
+from ..heartbeat import HeartbeatManager
+from ..cron import CronManager
 
 logger = logging.getLogger("tripletriple.gateway")
 
@@ -46,6 +49,11 @@ logger = logging.getLogger("tripletriple.gateway")
 
 session_manager = SessionManager(config=SessionConfig())
 chat_commands = ChatCommandHandler(session_manager=session_manager)
+heartbeat_manager = HeartbeatManager(session_manager=session_manager)
+cron_manager = CronManager(
+    workspace_root=WorkspaceConfig().root,
+    session_manager=session_manager
+)
 
 # Register /model command handler (defined below)
 def _cmd_model_wrapper(session, args: str) -> str:
@@ -90,7 +98,25 @@ def _cmd_help(session, args: str) -> str:
 
 chat_commands.register("/help", _cmd_help)
 
-memory_store = InMemoryStore()
+# Persistent Memory Store
+# 1. Vector Store (LanceDB)
+# 2. File Store (Markdown + Vector Store wrapper)
+try:
+    vector_store = LanceDBMemoryStore(
+        db_path="~/.tripletriple/state/memory",
+        table_name="memories",
+    )
+    # Ensure creation of tables
+    vector_store._ensure_table()
+except ImportError:
+    logger.warning("LanceDB not available, falling back to InMemoryStore (non-persistent).")
+    from ..memory.lancedb_store import InMemoryStore
+    vector_store = InMemoryStore()
+
+memory_store = FileBackedMemoryStore(
+    workspace_root=WorkspaceConfig().root,
+    vector_store=vector_store,
+)
 model_selector = ModelSelector()
 
 # Create provider from model catalog (auto-detects available API keys)
@@ -110,7 +136,8 @@ prompt_builder = SystemPromptBuilder(
     config=WorkspaceConfig(),
     model_name=f"{llm_provider.provider_name}/{llm_provider.model_id}",
     tools=[
-        "bash", "browser", "read_file", "write_file", "web_search", "cron",
+        "bash", "browser", "read_file", "write_file", "web_search", 
+        "cron_schedule", "cron_list", "cron_delete",
         "memory_save", "memory_search",
         "sessions_list", "sessions_history", "sessions_send", "sessions_spawn",
         "gateway",
@@ -132,7 +159,6 @@ agent = ReActAgent(
         ReadFileTool,
         WriteFileTool,
         WebSearchTool,
-        CronTool,
     ],
     prompt_builder=prompt_builder,
     tool_context=tool_context,
@@ -146,6 +172,13 @@ agent.tool_registry.register(SessionsHistoryTool())
 agent.tool_registry.register(SessionsSendTool())
 agent.tool_registry.register(SessionsSpawnTool())
 agent.tool_registry.register(GatewayTool())
+agent.tool_registry.register(CronScheduleTool(manager=cron_manager))
+agent.tool_registry.register(CronListTool(manager=cron_manager))
+agent.tool_registry.register(CronDeleteTool(manager=cron_manager))
+
+# Inject agent into heartbeat manager
+heartbeat_manager.set_agent(agent)
+cron_manager.set_agent(agent)
 
 # Create the channel dock
 dock = ChannelDock(
@@ -214,6 +247,10 @@ async def lifespan(app: FastAPI):
     # Auto-load channels
     await _load_channels()
 
+    # Start heartbeat
+    await heartbeat_manager.start()
+    await cron_manager.start()
+
     logger.info(f"Active model: {llm_provider.provider_name}/{llm_provider.model_id}")
     logger.info(f"Registered tools: {list(agent.tool_registry._tools.keys())}")
     logger.info(f"Registered channels: {list(dock.channels.keys())}")
@@ -231,6 +268,54 @@ async def lifespan(app: FastAPI):
             )
     except Exception:
         pass  # Non-critical, don't block startup
+
+    # Check for post-update marker
+    root = WorkspaceConfig().root
+    marker = root / ".update_success"
+    if marker.exists():
+        try:
+            logger.info("✨ Update detected! Broadcasting success message...")
+            version = get_version()
+            msg = f"🚀 **Update Complete!**\nTripleTriple is now running version `{version}`."
+            
+            # Broadcast to all connected channels
+            # We need to wait a small bit for channels to be ready? 
+            # Channels are loaded in _load_channels above.
+            # But dock.broadcast() would be ideal if implemented.
+            # For now, let's just log it. The user will see the restart.
+            # Wait, user specifically asked to "alert the user".
+            # We don't have a dock.broadcast() method yet.
+            # We can iterate dock.channels and send("broadcast", msg)?
+            # Or just send to the last active session?
+            # Let's iterate active sessions from the last 5 mins?
+            
+            # Broadcast to active sessions
+            recent_sessions = session_manager.list_sessions(active_minutes=1440) # Last 24h
+            count = 0
+            for entry in recent_sessions:
+                 session = session_manager.get_session_by_key(entry.session_key)
+                 if session:
+                     # Add system message to history
+                     session.add_message("system", msg)
+                     
+                     # Attempt to send via dock
+                     # We need to reconstruct minimal context to send outbound
+                     # Assuming the channel implementation can handle it
+                     try:
+                        await dock.send_outbound(
+                            channel=entry.channel,
+                            recipient_id=entry.origin.sender_id,
+                            text=msg,
+                            session=session
+                        )
+                        count += 1
+                     except Exception as e:
+                        logger.warning(f"Failed to broadcast to {entry.session_key}: {e}")
+
+            logger.info(f"Broadcast update notification to {count} sessions.")
+            marker.unlink()
+        except Exception as e:
+            logger.error(f"Failed to process update marker: {e}")
 
     yield
     # Shutdown logic
@@ -257,6 +342,10 @@ async def lifespan(app: FastAPI):
     # Wait for tasks to cancel
     if channel_tasks:
         await asyncio.gather(*channel_tasks, return_exceptions=True)
+
+    # Stop heartbeat
+    await heartbeat_manager.stop()
+    await cron_manager.stop()
 
     # Persist sessions on shutdown
     session_manager.save()

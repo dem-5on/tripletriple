@@ -1,11 +1,3 @@
-"""
-LLM Provider abstraction with Model Catalog integration.
-
-Each provider handles its own SDK and normalizes streaming chunks
-into a unified StreamChunk format. Adding a new provider only
-requires implementing chat_stream() that yields StreamChunk objects.
-"""
-
 from typing import List, Dict, Any, AsyncGenerator, Optional
 from dataclasses import dataclass, field
 import os
@@ -13,12 +5,10 @@ import json
 import logging
 import base64
 from pathlib import Path
-
 from openai import AsyncOpenAI
 import anthropic
 from google import genai
 from google.genai import types
-
 from .model_catalog import ModelSelector, ModelInfo, MODEL_CATALOG
 
 logger = logging.getLogger("tripletriple.agents.llm")
@@ -40,10 +30,10 @@ class StreamChunk:
     To add a new LLM provider, implement chat_stream() that converts
     the provider's raw chunks into StreamChunk objects.
     """
-    content: str = ""           # Text content (may be partial)
+    content: str = "" # Text content (may be partial)
     tool_calls: List[ToolCallChunk] = field(default_factory=list)
-    done: bool = False          # True on final chunk
-    input_tokens: int = 0       # Token usage (populated on final chunk)
+    done: bool = False # True on final chunk
+    input_tokens: int = 0 # Token usage (populated on final chunk)
     output_tokens: int = 0
 
 

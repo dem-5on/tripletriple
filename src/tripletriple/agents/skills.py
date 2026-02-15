@@ -57,6 +57,8 @@ class SkillEntry(BaseModel):
     content: str = ""   # full SKILL.md body (after frontmatter)
     requires: SkillRequirements = Field(default_factory=SkillRequirements)
     primary_env: str = ""
+    use_when: str = ""
+    avoid_when: str = ""
     user_invocable: bool = True
     disable_model_invocation: bool = False
     enabled: bool = True
@@ -173,6 +175,10 @@ def _parse_frontmatter(raw: str) -> tuple[Dict[str, Any], str]:
             result["command_dispatch"] = value
         elif key == "command-tool":
             result["command_tool"] = value
+        elif key == "use-when":
+            result["use_when"] = value
+        elif key == "avoid-when":
+            result["avoid_when"] = value
 
     return result, body
 
@@ -216,6 +222,8 @@ def _parse_skill_md(path: Path, location: str) -> Optional[SkillEntry]:
         content=body.strip(),
         requires=requires,
         primary_env=oc_meta.get("primaryEnv", ""),
+        use_when=fm.get("use_when", ""),
+        avoid_when=fm.get("avoid_when", ""),
         user_invocable=fm.get("user_invocable", True),
         disable_model_invocation=fm.get("disable_model_invocation", False),
         metadata=oc_meta,
@@ -343,6 +351,10 @@ class SkillLoader:
             lines.append("<skill>")
             lines.append(f"  <name>{name_esc}</name>")
             lines.append(f"  <description>{desc_esc}</description>")
+            if skill.use_when:
+                lines.append(f"  <use-when>{html_escape(skill.use_when)}</use-when>")
+            if skill.avoid_when:
+                lines.append(f"  <avoid-when>{html_escape(skill.avoid_when)}</avoid-when>")
             lines.append(f"  <location>{loc}</location>")
             lines.append("</skill>")
             lines.append("")

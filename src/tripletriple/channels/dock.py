@@ -110,3 +110,22 @@ class ChannelDock:
         
         session.add_message("assistant", response_text)
         await channel.send_message(chat_id, response_text)
+
+    async def send_outbound(self, channel: str, recipient_id: str, text: str, session: Any = None):
+        """
+        Send a proactive message (outbound) to a channel.
+        For persistent channels (Telegram/Discord), this works if the channel implements send_message.
+        For WebSocket, we might need the socket object (which we don't store here yet).
+        """
+        chan = self.channels.get(channel)
+        if not chan:
+            print(f"Warning: Channel {channel} not found for outbound message")
+            return
+
+        # Special handling for WebSocket? 
+        # For now, just try send_message if the channel supports it.
+        # Most adapters (Telegram, Discord) take (chat_id, text).
+        try:
+            await chan.send_message(recipient_id, text)
+        except Exception as e:
+            print(f"Error sending outbound to {channel}/{recipient_id}: {e}")

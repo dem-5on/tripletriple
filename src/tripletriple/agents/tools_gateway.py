@@ -108,6 +108,16 @@ class GatewayTool(Tool):
     def _update_restart(self) -> str:
         """Schedule a restart. Returns immediately, process restarts after."""
         logger.info("Restart requested via gateway tool")
+        
+        # Create a marker file to indicate we are restarting after an update
+        # We can put this in the workspace root or local dir
+        root = get_project_root()
+        marker = root / ".update_success"
+        try:
+            marker.touch()
+        except Exception as e:
+            logger.warning(f"Could not create update marker: {e}")
+
         # Schedule restart after a short delay to allow response to be sent
         asyncio.get_event_loop().call_later(2.0, restart_process)
         return json.dumps({

@@ -64,6 +64,10 @@ WORKSPACE_FILES = [
     "IDENTITY.md",
     "USER.md",
     "MEMORY.md",
+    "active-tasks.md",
+    "lessons.md",
+    "projects.md",
+    "self-review.md",
 ]
 
 # Files that ship as defaults and can be initialized
@@ -134,11 +138,32 @@ class SystemPromptBuilder:
         if user:
             sections.append(user)
 
-        # 6. MEMORY.md — long-term memory (main session only)
+        # 6. Structured Memory (Split Files)
         if is_main_session:
+            # 6a. active-tasks.md (Critical Context — Read First)
+            active_tasks = self._read_file("active-tasks.md")
+            if active_tasks:
+                sections.append(f"# ACTIVE TASKS (CRITICAL)\n{active_tasks}")
+
+            # 6b. lessons.md (Mistakes & Learnings)
+            lessons = self._read_file("lessons.md")
+            if lessons:
+                sections.append(f"# LESSONS & LEARNINGS\n{lessons}")
+
+            # 6c. projects.md (High-Level State)
+            projects = self._read_file("projects.md")
+            if projects:
+                sections.append(f"# PROJECTS STATE\n{projects}")
+
+            # 6d. self-review.md (Periodic Critiques)
+            self_review = self._read_file("self-review.md")
+            if self_review:
+                sections.append(f"# SELF REVIEW LOG\n{self_review}")
+
+            # 6e. MEMORY.md (Legacy/General - Deprecated but kept for transition)
             memory = self._read_file("MEMORY.md")
             if memory:
-                sections.append(memory)
+                sections.append(f"# GENERAL MEMORY\n{memory}")
 
         # 7. Daily notes — today + yesterday
         daily = self._read_daily_notes()
