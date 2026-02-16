@@ -192,7 +192,32 @@ class CronManager:
         if self.crontab_path.exists():
             try:
                 data = json.loads(self.crontab_path.read_text())
-                self._jobs = {j["id"]: CronJob(**j) for j in data}
+                migrated_jobs = {}
+                for j in data:
+                    # Migration: Handle legacy jobs without 'delivery'
+                    if "delivery" not in j:
+                        # Map old flat fields if present, else default
+                        old_channel = j.pop("target_channel", None)
+                        old_recipient = j.pop("target_recipient", None)
+                        
+                        j["delivery"] = {
+                            "mode": "announce",
+                            "channel": old_channel if old_channel else "last",
+                            "to": old_recipient
+                        }
+                    
+                    try:
+                        job = CronJob(**j)
+                        migrated_jobs[job.id] = job
+                    except Exception as e:
+                        logger.error(f"Skipping invalid job {j.get('id')}: {e}")
+                
+                self._jobs = migrated_jobs
+                
+                # Save immediately to persist migration
+                if self._jobs:
+                    self._save_jobs()
+                    
             except Exception as e:
                 logger.warning(f"Failed to load crontab: {e}")
 
