@@ -6,37 +6,44 @@ from .tools import Tool
 class CronScheduleSchema(BaseModel):
     schedule: str = Field(..., description="Cron expression (e.g., '0 6 * * *' or '06:00')")
     command: str = Field(..., description="Command or task description to run")
+    delivery_channel: str = Field("last", description="Where to send output (e.g. 'telegram', 'last')")
+    delivery_to: Optional[str] = Field(None, description="Specific target ID if not 'last'")
 
 class CronScheduleTool(Tool):
     name = "cron_schedule"
-    description = "Schedule a recurring task. Saves to crontab.json."
+    description = "Schedule a recurring task. Saves to crontab.json. Supports delivery configuration."
     args_schema = CronScheduleSchema
 
     def __init__(self, manager: Any):
         self.manager = manager
 
-    async def run(self, schedule: str, command: str) -> str:
-        # Capture context from the session creating this job
-        target_channel = None
-        target_recipient = None
-        
-        # Tools initialized with tool_context get it injected
-        if hasattr(self, "tool_context") and self.tool_context:
-            session = self.tool_context.get("session")
-            if session:
-                target_channel = session.entry.channel
-                # For DM, recipient is the user. For group, it's the group ID (often same path).
-                # We use origin.from_id as the primary target for DMs.
-                target_recipient = session.entry.origin.from_id
+    async def run(
+        self, 
+        schedule: str, 
+        command: str, 
+        delivery_channel: str = "last",
+        delivery_to: str = None
+    ) -> str:
+        # Resolve 'last' channel from current session context if not explicitly set
+        if delivery_channel == "last" and hasattr(self, "tool_context") and self.tool_context:
+            try:
+                session = self.tool_context.get("session")
+                if session and session.entry.channel:
+                    # Update config to be explicit about "last"
+                    delivery_channel = session.entry.channel
+                    if not delivery_to:
+                        delivery_to = session.entry.origin.from_id
+            except Exception:
+                pass # Fallback to generic "last" logic in manager
 
         job_id = self.manager.add_job(
             schedule, 
             command, 
-            target_channel=target_channel, 
-            target_recipient=target_recipient
+            delivery_channel=delivery_channel, 
+            delivery_to=delivery_to
         )
-        dest = f" (target: {target_channel})" if target_channel else ""
-        return f"✅ Scheduled task '{command}' with ID {job_id}{dest}"
+        dest = f" (target: {delivery_channel})"
+        return f"✅ Scheduled task '{command}' {dest} with ID {job_id}"
 
 class CronListSchema(BaseModel):
     pass

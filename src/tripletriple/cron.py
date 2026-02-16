@@ -11,12 +11,18 @@ from .gateway.session import SessionManager, InboundContext, ChatType
 
 logger = logging.getLogger("tripletriple.cron")
 
+class CronDelivery(BaseModel):
+    mode: str = "announce"  # "announce" or "none"
+    channel: str = "last"   # "telegram", "last", etc.
+    to: Optional[str] = None # channel ID, chat ID, phone, etc.
+
 class CronJob(BaseModel):
     id: str
-    schedule: str  # Simplified cron expression or "SS MM HH * * *"
+    schedule: str
     command: str
     last_run: float = 0.0
     enabled: bool = True
+    delivery: CronDelivery
 
 class CronManager:
     def __init__(self, workspace_root: Path, session_manager: SessionManager):
@@ -49,11 +55,31 @@ class CronManager:
             except asyncio.CancelledError:
                 pass
 
-    def add_job(self, schedule: str, command: str) -> str:
+    def add_job(
+        self, 
+        schedule: str, 
+        command: str, 
+        delivery_channel: str = "last",
+        delivery_to: Optional[str] = None,
+        delivery_mode: str = "announce"
+    ) -> str:
         """Register a new job via tool."""
         import uuid
         job_id = f"cron-{str(uuid.uuid4())[:8]}"
-        job = CronJob(id=job_id, schedule=schedule, command=command)
+        
+        # Construct delivery object
+        delivery = CronDelivery(
+            mode=delivery_mode,
+            channel=delivery_channel,
+            to=delivery_to
+        )
+        
+        job = CronJob(
+            id=job_id, 
+            schedule=schedule, 
+            command=command,
+            delivery=delivery
+        )
         self._jobs[job_id] = job
         self._save_jobs()
         return job_id
@@ -85,22 +111,14 @@ class CronManager:
 
         now = time.localtime()
         # Simple cron check logic (HH:MM matching for now to keep it robust without extra deps)
-        # Format: "HH:MM" for daily jobs or we can parse "M H * * *" if needed.
-        # The user example: "6 AM content research", "8 AM tech news".
-        # Let's support "HH:MM" format mainly, or standard 5-field cron if we implement parser.
-        # For simplicity without 'croniter', let's match "H M" locally.
-        
         current_hm = f"{now.tm_hour}:{now.tm_min:02d}"
         
-        for job in self._jobs.values():
+        # KEY FIX: Iterate over a copy of values to avoid "dictionary changed size" error
+        current_jobs = list(self._jobs.values())
+        
+        for job in current_jobs:
             if not job.enabled:
                 continue
-                
-            # Basic matching: if schedule == "06:00" and current == "6:00"
-            # Or if schedule is complex.
-            # Let's assume the schedule string IS the time "HH:MM".
-            # If the user provides valid Cron "0 6 * * *", we'd need a parser.
-            # I'll implement a VERY basic parser match for "M H * * *" (standard cron).
             
             if self._is_due(job, now):
                 # Don't run twice in same minute (last_run check)
@@ -121,7 +139,6 @@ class CronManager:
             # Check Match
             min_match = (min_field == "*") or (min_field == str(now_struct.tm_min))
             hour_match = (hour_field == "*") or (hour_field == str(now_struct.tm_hour))
-            # Ignore DOM/Month/Day for now (assume daily)
             return min_match and hour_match
             
         return False
@@ -131,24 +148,25 @@ class CronManager:
         job.last_run = time.time()
         self._save_jobs()
 
-        # Create isolated execution session but with context about where to send results
-        timestamp = int(time.time())
-        # We need to know WHERE to send the output due to the "isolated" session constraint.
-        # But for now, let's inject a system instruction to send the result to the user if possible.
-        # Or, ideally, we link this execution session to the original output channel.
+        if job.delivery.mode == "none":
+            # Just run without enhanced context? Or maybe we still run it but suppress output?
+            # For now, let's assume we proceed but maybe hint not to reply?
+            pass
+
+        # Resolve target
+        target_channel = job.delivery.channel
+        target_recipient = job.delivery.to
         
-        # If we have target metadata in the job (we need to add this), we can use it.
-        # For now, let's assume we want to route to the main session if no specific target.
-        # But wait, we don't store target info yet.
+        # If "last", we rely on the injected context from creation time if available, or just a generic "cron".
+        # But wait, we store the *creation* context in delivery.to if resolved?
+        # Actually, "last" usually implies "where the user was when they set it up" OR "where they are now".
+        # The user's spec says: "omit delivery... cron will fall back to last route... not reliable".
+        # So we should try to have explicit targets.
         
-        # NOTE: I am updating the job model in the next step to store 'target_channel' and 'target_recipient'.
-        # This function will use that.
-        
-        target_channel = getattr(job, "target_channel", None)
-        target_recipient = getattr(job, "target_recipient", None)
+        # For our tool usage, we populate 'to' at creation time.
         
         ctx = InboundContext(
-            channel=target_channel or "cron",
+            channel=target_channel if target_channel != "last" else "cron",
             sender_id=target_recipient or "system", 
             display_name=f"Cron: {job.command[:20]}...",
             is_dm=True
@@ -161,9 +179,11 @@ class CronManager:
         prompt = (
             f"⏰ **CRON EXECUTION**\n"
             f"Command: `{job.command}`\n"
-            f"Context: This is a scheduled task.\n\n"
-            f"Please execute this task. If it involves sending a message, "
-            f"send it to channel '{target_channel}' for user '{target_recipient}'."
+            f"Context: Scheduled task. Delivery: {job.delivery.mode} to {target_channel}:{target_recipient}.\n\n"
+            f"**INSTRUCTION**: Execute task.\n"
+            f"- If implied message, **output it**.\n"
+            f"- Response routed to: {target_channel} (user: {target_recipient})\n"
+            f"- Speaking IS sending."
         )
         
         await run_session_turn(self.agent, session, prompt, self.session_manager)

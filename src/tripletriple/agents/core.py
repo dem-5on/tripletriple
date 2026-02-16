@@ -125,7 +125,18 @@ class ReActAgent(Agent):
                 if tool:
                     # yield f"\n\n🔧 *{func_name}*\n"
                     try:
-                        args = json.loads(args_str) if args_str else {}
+                        try:
+                            args = json.loads(args_str) if args_str else {}
+                        except json.JSONDecodeError as json_err:
+                            # Fallback: sometimes LLM adds extra text or markdown
+                            # Try to extract JSON from code block if present
+                            import re
+                            match = re.search(r'\{.*\}', args_str, re.DOTALL)
+                            if match:
+                                args = json.loads(match.group(0))
+                            else:
+                                raise json_err
+
                         # Pass tool context for context-aware tools
                         if hasattr(tool, 'needs_context') and tool.needs_context:
                             args["_context"] = {
