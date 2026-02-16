@@ -131,24 +131,40 @@ class CronManager:
         job.last_run = time.time()
         self._save_jobs()
 
-        # Create isolated session for this job
-        # session key: cron:job_id:timestamp -> unique every run
-        # User said "Each cron runs in its own isolated session. No context bleed."
+        # Create isolated execution session but with context about where to send results
         timestamp = int(time.time())
-        session_key = f"cron:{job.id}:{timestamp}"
+        # We need to know WHERE to send the output due to the "isolated" session constraint.
+        # But for now, let's inject a system instruction to send the result to the user if possible.
+        # Or, ideally, we link this execution session to the original output channel.
+        
+        # If we have target metadata in the job (we need to add this), we can use it.
+        # For now, let's assume we want to route to the main session if no specific target.
+        # But wait, we don't store target info yet.
+        
+        # NOTE: I am updating the job model in the next step to store 'target_channel' and 'target_recipient'.
+        # This function will use that.
+        
+        target_channel = getattr(job, "target_channel", None)
+        target_recipient = getattr(job, "target_recipient", None)
         
         ctx = InboundContext(
-            channel="cron",
-            sender_id="system", 
+            channel=target_channel or "cron",
+            sender_id=target_recipient or "system", 
             display_name=f"Cron: {job.command[:20]}...",
             is_dm=True
         )
         
         session = self.session_manager.get_or_create(ctx)
-        # Type CRON
         session.entry.chat_type = ChatType.CRON
         
-        prompt = f"⏰ **CRON EXECUTION**\nCommand: `{job.command}`\n\nPlease execute this task now."
+        # Inject context about where to reply
+        prompt = (
+            f"⏰ **CRON EXECUTION**\n"
+            f"Command: `{job.command}`\n"
+            f"Context: This is a scheduled task.\n\n"
+            f"Please execute this task. If it involves sending a message, "
+            f"send it to channel '{target_channel}' for user '{target_recipient}'."
+        )
         
         await run_session_turn(self.agent, session, prompt, self.session_manager)
 

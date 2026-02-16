@@ -16,8 +16,27 @@ class CronScheduleTool(Tool):
         self.manager = manager
 
     async def run(self, schedule: str, command: str) -> str:
-        job_id = self.manager.add_job(schedule, command)
-        return f"✅ Scheduled task '{command}' with ID {job_id} (schedule: '{schedule}')"
+        # Capture context from the session creating this job
+        target_channel = None
+        target_recipient = None
+        
+        # Tools initialized with tool_context get it injected
+        if hasattr(self, "tool_context") and self.tool_context:
+            session = self.tool_context.get("session")
+            if session:
+                target_channel = session.entry.channel
+                # For DM, recipient is the user. For group, it's the group ID (often same path).
+                # We use origin.from_id as the primary target for DMs.
+                target_recipient = session.entry.origin.from_id
+
+        job_id = self.manager.add_job(
+            schedule, 
+            command, 
+            target_channel=target_channel, 
+            target_recipient=target_recipient
+        )
+        dest = f" (target: {target_channel})" if target_channel else ""
+        return f"✅ Scheduled task '{command}' with ID {job_id}{dest}"
 
 class CronListSchema(BaseModel):
     pass
