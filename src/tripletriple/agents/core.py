@@ -10,7 +10,7 @@ from .system_prompt import SystemPromptBuilder
 
 logger = logging.getLogger("tripletriple.agents.core")
 
-MAX_TOOL_ITERATIONS = 10
+MAX_TOOL_ITERATIONS = 20
 
 
 class ReActAgent(Agent):

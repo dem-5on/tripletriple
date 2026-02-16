@@ -1,5 +1,5 @@
-- **Name:** (not set)
-- **Timezone:** UTC
+- **Name:** Zyzzx
+- **Timezone:** UTC+0
 - **Preferred language:** English
 - **Communication style:** (not set)
 - **Notes:** (none yet)
