@@ -83,13 +83,19 @@ class ReActAgent(Agent):
                             idx = k
                             break
                     if idx not in tool_calls:
-                        tool_calls[idx] = {"id": "", "function": {"name": "", "arguments": ""}}
+                        tool_calls[idx] = {
+                            "id": "", 
+                            "function": {"name": "", "arguments": ""},
+                            "metadata": {}
+                        }
                     if tc.id:
                         tool_calls[idx]["id"] = tc.id
                     if tc.name:
                         tool_calls[idx]["function"]["name"] = tc.name
                     if tc.arguments:
                         tool_calls[idx]["function"]["arguments"] += tc.arguments
+                    if tc.metadata:
+                        tool_calls[idx]["metadata"].update(tc.metadata)
 
             # Update session token counts
             if total_input_tokens or total_output_tokens:
@@ -111,6 +117,7 @@ class ReActAgent(Agent):
                         "name": tc["function"]["name"],
                         "arguments": tc["function"]["arguments"],
                     },
+                    "metadata": tc.get("metadata", {})
                 }
                 for tc in tool_calls.values()
             ]
