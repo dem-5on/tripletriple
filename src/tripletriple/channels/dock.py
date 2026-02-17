@@ -110,9 +110,17 @@ class ChannelDock:
 
         # Process with Agent
         response_text = ""
-        async for chunk in self.agent.process_message(session, message_payload):
-            response_text += chunk
-            # TODO: Stream to channel if supported
+        try:
+            async for chunk in self.agent.process_message(session, message_payload):
+                response_text += chunk
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                response_text = "⚠️ I'm temporarily rate-limited by the AI provider. Please try again in a few minutes."
+                logger.error(f"Rate-limited (429) during message processing for session {session.id}")
+            else:
+                response_text = "Sorry, I encountered an error processing your message."
+                logger.error(f"Error processing message in session {session.id}: {e}")
         
         session.add_message("assistant", response_text)
         self.session_manager.write_transcript(session, session.messages[-1])
