@@ -77,6 +77,7 @@ TEMPLATE_FILES = [
     "IDENTITY.md",
     "USER.md",
     "MEMORY.md",
+    "BOOTSTRAP.md",
 ]
 
 
@@ -114,6 +115,11 @@ class SystemPromptBuilder:
             The complete system prompt string.
         """
         sections: List[str] = []
+
+        # 0. Bootstrap Mode Check
+        # If we need bootstrap, IGNORE everything else and return the bootstrap prompt.
+        if self.needs_bootstrap():
+            return self.get_bootstrap_prompt()
 
         # 1. Boot context (always first — runtime metadata)
         sections.append(self._build_boot_context())
@@ -177,32 +183,34 @@ class SystemPromptBuilder:
         return "\n\n---\n\n".join(sections)
 
     def needs_bootstrap(self) -> bool:
-        """Check if this is a first run (no IDENTITY.md yet)."""
+        """
+        Check if we are in bootstrap mode.
+        Condition: IDENTITY.md is missing AND BOOTSTRAP.md is present.
+        """
         identity_path = self.config.root / "IDENTITY.md"
-        return not identity_path.exists()
+        bootstrap_path = self.config.root / "BOOTSTRAP.md"
+        
+        # If identity exists, we are done.
+        if identity_path.exists():
+            return False
+            
+        # If identity is missing, do we have the bootstrap instructions?
+        return bootstrap_path.exists()
 
     def get_bootstrap_prompt(self) -> str:
         """
         Return the bootstrap system prompt for first-run onboarding.
+        Reads from BOOTSTRAP.md in the workspace.
         """
+        bootstrap_path = self.config.root / "BOOTSTRAP.md"
+        if bootstrap_path.exists():
+            return bootstrap_path.read_text(encoding="utf-8").strip()
+            
+        # Fallback if file missing (shouldn't happen if needs_bootstrap checked it)
         return (
-            "# BOOTSTRAP — Hello, World\n\n"
-            "This is your first run. You need to get to know your human.\n\n"
-            "## The Conversation\n"
-            "Have a natural conversation to learn:\n"
-            "1. **Your name** — What should they call you?\n"
-            "2. **Your nature** — What kind of creature are you? "
-            "(AI assistant is fine, but maybe you're something weirder)\n"
-            "3. **Your vibe** — Formal? Casual? Snarky? Warm? What feels right?\n"
-            "4. **Your emoji** — Everyone needs a signature.\n\n"
-            "## After You Know Who You Are\n"
-            "Create these files in the workspace:\n"
-            "- **IDENTITY.md** — your name, creature, vibe, emoji\n"
-            "- **USER.md** — their name, how to address them, timezone, notes\n"
-            "- Optionally customize **SOUL.md** together — what matters to them, "
-            "how they want you to behave, boundaries and preferences\n\n"
-            "## When You're Done\n"
-            "Confirm what you've learned and saved. Then start being yourself."
+            "# BOOTSTRAP MODE\n"
+            "I am in bootstrap mode but can't find BOOTSTRAP.md. "
+            "Please ask the user to restore the file or create IDENTITY.md manually."
         )
 
     # ── Workspace Init ────────────────────────────────────────

@@ -9,14 +9,19 @@ import os
 from typing import List, Optional
 from .store import MemoryStore, MemoryEntry, SearchResult
 
-try:
-    import lancedb
-    from lancedb.pydantic import LanceModel, Vector
-    from lancedb.embeddings import get_registry
 
-    LANCEDB_AVAILABLE = True
+try:
+    from typing import TYPE_CHECKING
+    if TYPE_CHECKING:
+        import lancedb
+        from lancedb.pydantic import LanceModel, Vector
 except ImportError:
-    LANCEDB_AVAILABLE = False
+    pass
+
+import importlib.util
+
+# Check availability without importing to avoid fork-safety warning
+LANCEDB_AVAILABLE = importlib.util.find_spec("lancedb") is not None
 
 
 class LanceDBMemoryStore(MemoryStore):
@@ -41,19 +46,41 @@ class LanceDBMemoryStore(MemoryStore):
 
         self.db_path = db_path or os.path.expanduser("~/.tripletriple/state/memory")
         self.table_name = table_name
+        self.embedding_model_name = embedding_model
+        
+        # Lazy initialization
+        self.db = None
+        self.table = None
+        self._embedding_fn = None
+
+    def _connect(self):
+        """Connect to DB and load embedding model (lazy load)."""
+        if self.db is not None:
+            return
+
+        # Import here to avoid fork-safety warning on module level
+        import lancedb
+        from lancedb.embeddings import get_registry
+
         self.db = lancedb.connect(self.db_path)
 
         # Use sentence-transformers for embeddings
         self._embedding_fn = (
             get_registry()
             .get("sentence-transformers")
-            .create(name=embedding_model)
+            .create(name=self.embedding_model_name)
         )
 
         self._ensure_table()
 
+    def _ensure_connected(self):
+        """Ensure DB connection is established."""
+        if self.db is None:
+            self._connect()
+
     def _ensure_table(self):
         """Create the table if it does not exist."""
+        # _connect guarantees self.db is set, but we call this from _connect
         if self.table_name not in self.db.table_names():
             import pyarrow as pa
 
@@ -76,6 +103,7 @@ class LanceDBMemoryStore(MemoryStore):
 
     async def add(self, entry: MemoryEntry) -> str:
         """Embed and store a memory entry."""
+        self._ensure_connected()
         import json
 
         # Generate embedding
@@ -96,6 +124,7 @@ class LanceDBMemoryStore(MemoryStore):
 
     async def search(self, query: str, top_k: int = 5) -> List[SearchResult]:
         """Semantic search over stored memories."""
+        self._ensure_connected()
         import json
 
         query_embedding = self._embedding_fn.compute_source_embeddings([query])[0]
@@ -122,6 +151,7 @@ class LanceDBMemoryStore(MemoryStore):
 
     async def delete(self, entry_id: str) -> bool:
         """Delete a memory entry by ID."""
+        self._ensure_connected()
         try:
             self.table.delete(f"id = '{entry_id}'")
             return True
@@ -130,6 +160,7 @@ class LanceDBMemoryStore(MemoryStore):
 
     async def list_all(self, session_id: Optional[str] = None) -> List[MemoryEntry]:
         """List all entries, optionally filtered by session."""
+        self._ensure_connected()
         import json
 
         df = self.table.to_pandas()

@@ -166,16 +166,19 @@ def run_onboarding():
             config.set("SLACK_APP_TOKEN", app_token)
             console.print("[green]✅ Saved Slack tokens[/green]")
     
-    # ── Step 4: Identity (Basic) ──────────────────────────────────
+    # ── Step 4: Identity ──────────────────────────────────────────
     console.print("\n[bold yellow]4. Identity[/bold yellow]")
-    agent_name = Prompt.ask("Name your agent", default="TripleTriple")
     
-    # Initialize workspace identity
-    workspace_dir = Path(os.path.expanduser("~/.tripletriple/workspace"))
-    workspace_dir.mkdir(parents=True, exist_ok=True)
+    # Initialize workspace with templates (including BOOTSTRAP.md)
+    from ..agents.system_prompt import SystemPromptBuilder
+    workspace_path = SystemPromptBuilder.init_workspace()
+    console.print(f"[green]✅ Workspace initialized at {workspace_path}[/green]")
     
-    identity_file = workspace_dir / "IDENTITY.md"
-    if not identity_file.exists():
+    console.print("\nYou can define the agent's identity now, or discover it through conversation (Bootstrap Ritual).")
+    if Confirm.ask("Define identity now?", default=True):
+        agent_name = Prompt.ask("Name your agent", default="TripleTriple")
+        
+        identity_file = workspace_path / "IDENTITY.md"
         identity_content = f"""# IDENTITY.md — Who Am I?
 
 - **Name:** {agent_name}
@@ -183,16 +186,20 @@ def run_onboarding():
 - **Vibe:** Helpful, concise, and proactive
 - **Emoji:** 🤖
 """
-        identity_file.write_text(identity_content)
-        console.print(f"[green]✅ Identity initialized ({agent_name})[/green]")
+        identity_file.write_text(identity_content, encoding="utf-8")
+        console.print(f"[green]✅ Identity saved ({agent_name})[/green]")
+        
+        # Remove BOOTSTRAP.md if we manually created identity
+        bootstrap_file = workspace_path / "BOOTSTRAP.md"
+        if bootstrap_file.exists():
+            bootstrap_file.unlink()
+            
     else:
-        # Update name in existing file? simple replace for now if standard format
-        content = identity_file.read_text()
-        if "**Name:**" in content:
-            import re
-            content = re.sub(r"\*\*Name:\*\* .*", f"**Name:** {agent_name}", content)
-            identity_file.write_text(content)
-            console.print(f"[green]✅ Identity updated ({agent_name})[/green]")
+        console.print("[blue]ℹ️  Bootstrap Mode enabled. The agent will ask for its name when you first chat.[/blue]")
+        # Ensure IDENTITY.md is gone so ritual triggers
+        identity_file = workspace_path / "IDENTITY.md"
+        if identity_file.exists():
+            identity_file.unlink()
 
 
     # ── Step 5: Dependencies ──────────────────────────────────────

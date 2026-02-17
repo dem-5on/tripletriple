@@ -68,9 +68,10 @@ class OpenAIProvider(LLMProvider):
     async def chat_stream(
         self,
         messages: List[Dict[str, str]],
-        tools: List[Dict[str, Any]] = None,
+        tools: List[Any] = None, # List[Tool] objects
     ) -> AsyncGenerator[StreamChunk, None]:
-        # Pre-process messages to handle multimodal content
+        # Convert tools to OpenAI schema
+        openai_tools = [t.to_openai_schema() for t in tools] if tools else None
         processed_messages = []
         for msg in messages:
             content = msg["content"]
@@ -96,7 +97,7 @@ class OpenAIProvider(LLMProvider):
         stream = await self.client.chat.completions.create(
             model=self.model_id,
             messages=processed_messages,
-            tools=tools or None,
+            tools=openai_tools,
             stream=True,
         )
         async for chunk in stream:
@@ -133,8 +134,9 @@ class AnthropicProvider(LLMProvider):
     async def chat_stream(
         self,
         messages: List[Dict[str, str]],
-        tools: List[Dict[str, Any]] = None,
+        tools: List[Any] = None, # List[Tool] objects
     ) -> AsyncGenerator[StreamChunk, None]:
+        anthropic_tools = [t.to_anthropic_schema() for t in tools] if tools else []
         system_prompt = next(
             (m["content"] for m in messages if m["role"] == "system"), ""
         )
@@ -172,7 +174,7 @@ class AnthropicProvider(LLMProvider):
             system=system_prompt,
             messages=user_messages,
             model=self.model_id,
-            tools=tools or [],
+            tools=anthropic_tools,
         ) as stream:
             async for event in stream:
                 sc = StreamChunk()
@@ -281,9 +283,69 @@ class GeminiProvider(LLMProvider):
                     contents.append(types.Content(role="model", parts=parts))
                 continue
 
-            # ... (rest of loop)
+            # ── Regular user/assistant messages with text/image content ──
+            content_parts = []
+            content_data = msg.get("content", "")
+            
+            if isinstance(content_data, str):
+                if content_data.strip():  # Only add non-empty text
+                    content_parts.append(types.Part.from_text(text=content_data))
+            elif isinstance(content_data, list):
+                for item in content_data:
+                    if item.get("type") == "text":
+                        text = item.get("text", "")
+                        if text.strip():
+                            content_parts.append(types.Part.from_text(text=text))
+                    elif item.get("type") == "image":
+                        path = item.get("path")
+                        if path and os.path.exists(path):
+                            mime = item.get("mime_type", "image/jpeg")
+                            data = Path(path).read_bytes()
+                            b64 = base64.b64encode(data).decode("utf-8")
+                            content_parts.append(types.Part(
+                                inline_data=types.Blob(
+                                    mime_type=mime,
+                                    data=data
+                                )
+                            ))
+            
+            if content_parts:
+                role = "model" if msg["role"] == "assistant" else "user"
+                contents.append(types.Content(role=role, parts=content_parts))
 
-        # ... (streaming call)
+        # Add validation to prevent empty contents
+        if not contents:
+            logger.warning("No valid contents generated for Gemini API call")
+            # Return empty stream or raise error
+            return
+        
+        # ── Call Gemini API ──
+        
+        # Configure tool use if tools are provided
+        genai_tools_config = None
+        if tools:
+            # Convert to Gemini FunctionDeclarations and wrap in a single Tool
+            funcs = [t.to_gemini_schema() for t in tools]
+            # Gemini expects a list of Tool objects, where each Tool can have multiple function_declarations
+            # We create ONE Tool containing all our functions.
+            genai_tools_config = types.GenerateContentConfig(
+                tools=[types.Tool(function_declarations=funcs)],
+            )
+
+        print(f"DEBUG: GeminiProvider.chat_stream generated {len(contents)} content items")
+
+        # ADD THIS VALIDATION:
+        if not contents:
+            logger.error("Cannot call Gemini API with empty contents")
+            raise ValueError("contents are required - no valid messages to send")
+
+        # Use the asynchronous stream generation (via .aio accessor)
+        stream = await self.client.aio.models.generate_content_stream(
+            model=self.model_id,
+            contents=contents,
+            config=genai_tools_config
+        )
+
         async for chunk in stream:
             sc = StreamChunk()
             # Parse parts directly to handle text and function calls safely

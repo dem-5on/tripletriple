@@ -1,12 +1,12 @@
 import json
 import asyncio
 import logging
+from .base import Agent
 from typing import AsyncGenerator, List, Dict, Any, Type, Optional, Union
 from ..gateway.session import Session
-from .base import Agent
 from .tools import ToolRegistry, Tool
-from .llm import LLMProvider, OpenAIProvider, StreamChunk
 from .system_prompt import SystemPromptBuilder
+from .llm import LLMProvider, OpenAIProvider, StreamChunk
 
 logger = logging.getLogger("tripletriple.agents.core")
 
@@ -35,12 +35,26 @@ class ReActAgent(Agent):
     ) -> AsyncGenerator[str, None]:
         """
         ReAct loop: LLM → tool execution → feed results back → repeat.
-
-        Yields text chunks as the LLM generates them. When the LLM
-        requests tool calls, executes them and feeds results back for
-        the next iteration. Stops when the LLM produces a final text
-        response with no tool calls, or after MAX_TOOL_ITERATIONS.
         """
+        # ── 1. Bootstrap Cleanup Check ──
+        # Check if we started in bootstrap mode
+        started_in_bootstrap = False
+        if self.prompt_builder and self.prompt_builder.needs_bootstrap():
+            started_in_bootstrap = True
+
+        # ── 2. Memory Flush Check ──
+        # If tokens are high, inject a "Flush Turn" system message
+        FLUSH_THRESHOLD = 50000  # TODO: Make configurable
+        flushing_memory = False
+        
+        if session.entry.tokens.total_tokens > FLUSH_THRESHOLD:
+            logger.info(f"Memory flush triggered for {session.key} ({session.entry.tokens.total_tokens} tokens)")
+            flushing_memory = True
+            # We don't yield this message to the user, it is internal to the LLM
+            # But here we just set a flag to inject instructions.
+            # actually, we might want to do a separate turn? 
+            # For now, let's just append a strong system instruction to the prompt.
+            
         # Build messages list starting with system prompt
         messages: List[Dict[str, Any]] = []
 
@@ -50,13 +64,28 @@ class ReActAgent(Agent):
             system_prompt = self.prompt_builder.assemble(is_main_session=is_main)
             messages.append({"role": "system", "content": system_prompt})
 
+        # Inject Memory Flush Instruction if needed
+        if flushing_memory:
+            messages.append({
+                "role": "system",
+                "content": (
+                    "🚨 **CRITICAL: MEMORY FLUSH REQUIRED** 🚨\n"
+                    "Your context window is getting full.\n"
+                    "1. Review the conversation history.\n"
+                    "2. Save any important facts, preferences, or tasks to memory files using your tools.\n"
+                    "3. AFTER saving, you may continue with the user's request.\n"
+                    "Do not complain about this. Just do it."
+                )
+            })
+
         # Append conversation history
         messages.extend(
             {"role": m.role, "content": m.content}
             for m in session.messages
         )
 
-        tools_schema = self.tool_registry.get_all_schemas()
+        # Pass actual Tool objects to the provider so it can generate the correct schema
+        tools = list(self.tool_registry.get_all().values())
 
         # ── ReAct Loop ──
         for iteration in range(MAX_TOOL_ITERATIONS):
@@ -66,7 +95,7 @@ class ReActAgent(Agent):
             total_output_tokens = 0
 
             # Stream LLM response
-            async for chunk in self.llm.chat_stream(messages, tools=tools_schema):
+            async for chunk in self.llm.chat_stream(messages, tools=tools):
                 if chunk.content:
                     full_content += chunk.content
                     yield chunk.content
@@ -171,3 +200,25 @@ class ReActAgent(Agent):
         # If we hit the iteration limit, warn
         if tool_calls:
             yield "\n\n⚠️ Reached maximum tool iterations.\n"
+
+        # ── Post-Processing ──
+
+        # 1. Bootstrap Cleanup
+        if started_in_bootstrap and self.prompt_builder:
+            # Check if we are NO LONGER in bootstrap mode (meaning IDENTITY.md was created)
+            if not self.prompt_builder.needs_bootstrap():
+                # Cleanup BOOTSTRAP.md
+                bootstrap_path = self.prompt_builder.config.root / "BOOTSTRAP.md"
+                if bootstrap_path.exists():
+                    try:
+                        bootstrap_path.unlink()
+                        logger.info("Bootstrap complete. Deleted BOOTSTRAP.md.")
+                        # yield "\n\n✨ Identity established. Bootstrap complete."
+                    except Exception as e:
+                        logger.error(f"Failed to delete BOOTSTRAP.md: {e}")
+
+        # 2. Pruning (if we just finished a flush turn)
+        if flushing_memory:
+            removed = session.prune_context(keep_last=20)
+            if removed > 0:
+                logger.info(f"Pruned {removed} messages from session {session.key}")
