@@ -2,7 +2,7 @@
 Gateway HTTP Routes — REST API endpoints.
 
 Provides: health check, system status, model management,
-session listing, and WhatsApp webhook.
+session listing, WhatsApp webhook, and generic webhook handler.
 """
 
 from fastapi import APIRouter, Request
@@ -204,3 +204,37 @@ async def whatsapp_verify(request: Request):
     if mode == "subscribe" and token == verify_token:
         return int(challenge)
     return {"error": "Verification failed"}, 403
+
+
+# ─── Generic Webhook ──────────────────────────────────────────────
+
+@router.post("/webhook/{hook_id}")
+async def generic_webhook(hook_id: str, request: Request):
+    """
+    Generic webhook endpoint.
+    Creates a hook session and runs the agent with the payload.
+    """
+    from ..services.agent_runner import run_session_turn
+    from ..session.models import InboundContext
+
+    body = await request.json()
+    payload_text = body.get("text", body.get("message", str(body)))
+
+    # Create a hook session
+    ctx = InboundContext(
+        channel="webhook",
+        sender_id=hook_id,
+        is_dm=True,
+    )
+    session = session_manager.get_or_create(ctx, text=payload_text)
+
+    # Run the agent
+    response = await run_session_turn(
+        agent, session, payload_text, session_manager
+    )
+
+    return {
+        "status": "processed",
+        "hook_id": hook_id,
+        "response": response,
+    }

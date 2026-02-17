@@ -104,12 +104,25 @@ class HeartbeatManager:
         """Inject the heartbeat prompt and run the agent."""
         logger.info(f"💓 Sending heartbeat to session {session.id}")
         
-        prompt = (
-            "⏰ **SYSTEM HEARTBEAT**\n"
-            "Please check `HEARTBEAT.md` and perform any necessary health checks "
-            "(active tasks, session size, self-review).\n"
-            "If everything is fine, reply with `HEARTBEAT_OK`."
-        )
+        # Read HEARTBEAT.md checklist from workspace
+        checklist = ""
+        if self.workspace_root:
+            hb_path = self.workspace_root / "HEARTBEAT.md"
+            if hb_path.exists():
+                try:
+                    checklist = hb_path.read_text(encoding="utf-8").strip()
+                except Exception as e:
+                    logger.warning(f"Failed to read HEARTBEAT.md: {e}")
+        
+        prompt = "⏰ **SYSTEM HEARTBEAT**\n"
+        if checklist:
+            prompt += f"\n{checklist}\n\n"
+        else:
+            prompt += (
+                "Please perform health checks "
+                "(active tasks, session size, self-review).\n"
+            )
+        prompt += "If everything is fine, reply with `HEARTBEAT_OK`."
         
         # Run the agent turn autonomously
         await run_session_turn(self.agent, session, prompt, self.session_manager)

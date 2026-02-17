@@ -46,8 +46,9 @@ class SessionManager:
     (creation, reset, pruning), and handles persistence.
     """
 
-    def __init__(self, config: SessionConfig = None):
+    def __init__(self, config: SessionConfig = None, workspace_manager=None):
         self.config = config or SessionConfig()
+        self.workspace_manager = workspace_manager
         self._sessions: Dict[str, Session] = {}       # key → Session
         self._entries: Dict[str, SessionEntry] = {}    # key → store entry
         self._store_path = resolve_store_path(
@@ -165,10 +166,20 @@ class SessionManager:
         return self.get_or_create(ctx)
 
     def reset_session(self, key: str) -> Optional[Session]:
-        """Force-reset a session by key."""
+        """Force-reset a session by key. Flushes summary to daily log first."""
         old = self._sessions.get(key)
         if not old:
             return None
+
+        # Flush session summary to daily memory log
+        if self.workspace_manager and old.messages:
+            from .persistence import extract_topics
+            topics = extract_topics(old.messages) or ["general"]
+            self.workspace_manager.flush_session_summary(
+                session_key=key,
+                message_count=len(old.messages),
+                topics=topics,
+            )
 
         ctx = InboundContext(
             channel=old.entry.channel or "unknown",

@@ -1,10 +1,14 @@
 import os
 import time
+import logging
 from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Union
 from ..gateway.session import SessionManager, ChatCommandHandler
+from ..session.models import Message
 from ..agents.base import Agent
+
+logger = logging.getLogger("tripletriple.channels.dock")
 
 class Channel(ABC):
     @abstractmethod
@@ -93,10 +97,12 @@ class ChannelDock:
             
             # Use structured list
             session.add_message("user", content)
+            session_manager.write_transcript(session, session.messages[-1])
             message_payload = content
         else:
             # Use simple string
             session.add_message("user", text)
+            session_manager.write_transcript(session, session.messages[-1])
             message_payload = text
         
         # Determine channel to reply to
@@ -109,6 +115,8 @@ class ChannelDock:
             # TODO: Stream to channel if supported
         
         session.add_message("assistant", response_text)
+        self.session_manager.write_transcript(session, session.messages[-1])
+        self.session_manager.save()
         await channel.send_message(chat_id, response_text)
 
     async def send_outbound(self, channel: str, recipient_id: str, text: str, session: Any = None):

@@ -44,15 +44,27 @@ from ..memory.lancedb_store import LanceDBMemoryStore
 from ..memory.file_store import FileBackedMemoryStore
 from ..services.heartbeat import HeartbeatManager
 from ..services.cron import CronManager
+from ..workspace import WorkspaceManager
 
 logger = logging.getLogger("tripletriple.gateway")
 
 
 # ─── Shared State ─────────────────────────────────────────────────
 
-session_manager = SessionManager(config=SessionConfig())
+# Workspace Manager — runtime access to workspace files
+workspace_manager = WorkspaceManager(
+    workspace_root=str(WorkspaceConfig().root),
+)
+
+session_manager = SessionManager(
+    config=SessionConfig(),
+    workspace_manager=workspace_manager,
+)
 chat_commands = ChatCommandHandler(session_manager=session_manager)
-heartbeat_manager = HeartbeatManager(session_manager=session_manager)
+heartbeat_manager = HeartbeatManager(
+    session_manager=session_manager,
+    workspace_root=WorkspaceConfig().root,
+)
 cron_manager = CronManager(
     workspace_root=WorkspaceConfig().root,
     session_manager=session_manager,
@@ -105,6 +117,7 @@ prompt_builder = SystemPromptBuilder(
 # Tool context — shared services that context-aware tools need
 tool_context = {
     "session_manager": session_manager,
+    "workspace_manager": workspace_manager,
 }
 
 # Create the agent with all tools + prompt builder

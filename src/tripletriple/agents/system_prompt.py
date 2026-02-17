@@ -64,6 +64,7 @@ WORKSPACE_FILES = [
     "IDENTITY.md",
     "USER.md",
     "MEMORY.md",
+    "HEARTBEAT.md",
     "active-tasks.md",
     "lessons.md",
     "projects.md",
@@ -77,6 +78,7 @@ TEMPLATE_FILES = [
     "IDENTITY.md",
     "USER.md",
     "MEMORY.md",
+    "HEARTBEAT.md",
     "BOOTSTRAP.md",
 ]
 
@@ -278,10 +280,19 @@ class SystemPromptBuilder:
         return None
 
     def _read_daily_notes(self) -> Optional[str]:
-        """Read today's and yesterday's daily notes."""
+        """Read today's and yesterday's daily notes. Auto-creates today's log if missing."""
         memory_dir = self.config.memory_dir
         if not memory_dir.exists():
-            return None
+            memory_dir.mkdir(parents=True, exist_ok=True)
+
+        # Ensure today's log exists
+        today = datetime.now()
+        today_path = memory_dir / f"{today.strftime('%Y-%m-%d')}.md"
+        if not today_path.exists():
+            today_path.write_text(
+                f"## {today.strftime('%Y-%m-%d')}\n\n",
+                encoding="utf-8",
+            )
 
         notes: List[str] = []
         today = datetime.now()
