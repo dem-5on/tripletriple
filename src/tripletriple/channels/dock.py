@@ -97,12 +97,12 @@ class ChannelDock:
             
             # Use structured list
             session.add_message("user", content)
-            session_manager.write_transcript(session, session.messages[-1])
+            self.session_manager.write_transcript(session, session.messages[-1])
             message_payload = content
         else:
             # Use simple string
             session.add_message("user", text)
-            session_manager.write_transcript(session, session.messages[-1])
+            self.session_manager.write_transcript(session, session.messages[-1])
             message_payload = text
         
         # Determine channel to reply to
